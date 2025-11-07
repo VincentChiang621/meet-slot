@@ -1,67 +1,142 @@
-import { useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from "react";
 
 export default function EventView() {
-  const { id } = useParams();
-  const [name, setName] = useState('');
-  
-  // Mock data - will be replaced with API call
-  const event = {
-    title: 'Team Meeting',
-    description: 'Planning session for Q4',
-    dates: ['2025-11-05', '2025-11-06', '2025-11-07'],
-    timeSlots: ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00']
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  const startHour = 9;
+  const endHour = 17;
+  const incrementMinutes = 15;
+
+  // Flattened time slots (e.g., 9:00, 9:15, 9:30 ...)
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let h = startHour; h < endHour; h++) {
+      for (let m = 0; m < 60; m += incrementMinutes) {
+        slots.push({ hour: h, minute: m });
+      }
+    }
+    return slots;
+  };
+  const timeSlots = generateTimeSlots();
+
+  const [selected, setSelected] = useState(new Set());
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragRect, setDragRect] = useState(null);
+  const dragMode = useRef(null);
+  const dragStart = useRef(null);
+
+  const handleMouseDown = (dayIdx, timeIdx) => {
+    const key = `${dayIdx}-${timeIdx}`;
+    const isSelected = selected.has(key);
+    dragMode.current = isSelected ? "deselect" : "select";
+    dragStart.current = { dayIdx, timeIdx };
+    setIsDragging(true);
+    setDragRect({ startDay: dayIdx, startTime: timeIdx, endDay: dayIdx, endTime: timeIdx });
+  };
+
+  const handleMouseEnter = (dayIdx, timeIdx) => {
+    if (!isDragging || !dragStart.current) return;
+    setDragRect({
+      startDay: dragStart.current.dayIdx,
+      startTime: dragStart.current.timeIdx,
+      endDay: dayIdx,
+      endTime: timeIdx,
+    });
+  };
+
+  const handleMouseUp = () => {
+    if (!dragRect) return;
+    const { startDay, endDay, startTime, endTime } = dragRect;
+    const dMin = Math.min(startDay, endDay);
+    const dMax = Math.max(startDay, endDay);
+    const tMin = Math.min(startTime, endTime);
+    const tMax = Math.max(startTime, endTime);
+
+    const newSelected = new Set(selected);
+    for (let d = dMin; d <= dMax; d++) {
+      for (let t = tMin; t <= tMax; t++) {
+        const key = `${d}-${t}`;
+        if (dragMode.current === "select") newSelected.add(key);
+        else newSelected.delete(key);
+      }
+    }
+    setSelected(newSelected);
+    setIsDragging(false);
+    setDragRect(null);
+    dragStart.current = null;
+  };
+
+  useEffect(() => {
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [dragRect]);
+
+  const isInDragRect = (d, t) => {
+    if (!isDragging || !dragRect) return false;
+    const dMin = Math.min(dragRect.startDay, dragRect.endDay);
+    const dMax = Math.max(dragRect.startDay, dragRect.endDay);
+    const tMin = Math.min(dragRect.startTime, dragRect.endTime);
+    const tMax = Math.max(dragRect.startTime, dragRect.endTime);
+    return d >= dMin && d <= dMax && t >= tMin && t <= tMax;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-md p-8 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {event.title}
-          </h1>
-          <p className="text-gray-600 mb-4">{event.description}</p>
-          <p className="text-sm text-gray-500">Event ID: {id}</p>
-        </div>
+    <div className="max-w-6xl mx-auto p-6 bg-white rounded-2xl shadow-sm h-[90vh] flex flex-col">
+      <h2 className="text-2xl font-semibold mb-4 text-center flex-shrink-0">
+        Select Your Availability
+      </h2>
 
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Your Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your name"
-            />
-          </div>
+      <div className="flex-1 overflow-x-auto select-none">
+        <table className="w-full border-collapse text-sm h-full">
+          <thead>
+            <tr>
+              <th className="w-20 p-2 text-left text-gray-500">Time</th>
+              {days.map((d) => (
+                <th key={d} className="p-2 text-center text-gray-700 font-medium">
+                  {d}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {timeSlots.map((slot, tIdx) => {
+              const label = new Date(0, 0, 0, slot.hour, slot.minute).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              });
+              return (
+                <tr key={tIdx}>
+                  <td className="p-2 text-gray-600 whitespace-nowrap">{label}</td>
+                  {days.map((_, dIdx) => {
+                    const key = `${dIdx}-${tIdx}`;
+                    const isSelected = selected.has(key);
+                    const isPreview = isInDragRect(dIdx, tIdx);
+                    return (
+                      <td
+                        key={key}
+                        onMouseDown={() => handleMouseDown(dIdx, tIdx)}
+                        onMouseEnter={() => handleMouseEnter(dIdx, tIdx)}
+                        className={`border cursor-pointer transition-colors duration-100 ${
+                          isDragging && isPreview
+                            ? dragMode.current === "select"
+                              ? "bg-blue-300"
+                              : "bg-red-200"
+                            : isSelected
+                            ? "bg-blue-500 hover:bg-blue-600"
+                            : "hover:bg-blue-100"
+                        }`}
+                      />
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Select Your Availability
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Click and drag to select times you're available
-            </p>
-            
-            {/* Placeholder for TimeGrid component */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center text-gray-500">
-              <p>Time Grid Component</p>
-              <p className="text-sm mt-2">Will be built next</p>
-            </div>
-          </div>
-
-          <button
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
-            disabled={!name}
-          >
-            Submit Availability
-          </button>
-        </div>
+      <div className="mt-4 text-sm text-gray-600 text-center">
+        {selected.size} slot{selected.size !== 1 && "s"} selected
       </div>
     </div>
   );
 }
-

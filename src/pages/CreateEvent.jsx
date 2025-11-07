@@ -41,7 +41,7 @@ export default function CreateEvent() {
       </div>
 
       {/* Timezone */}
-      <div>
+      <div className="relative z-30">
        <label className="block text-sm font-medium mb-1">Select Timezone</label>
         <TimezoneSelect
           value={selectedTimezone}
@@ -50,7 +50,7 @@ export default function CreateEvent() {
       </div>
 
       {/* Minute increment */}
-      <div>
+      <div className="relative z-20">
         <label className="block text-sm font-medium mb-1">Time increments</label>
         <Select
           options={increments}
@@ -61,7 +61,7 @@ export default function CreateEvent() {
       </div>
 
       {/* Calendar date selector */}
-      <label className="block text-sm font-medium mb-3">Select dates</label>
+      <label className="block text-sm font-medium mb-3 relative z-10">Select dates</label>
       <DateSelector
         selectedDays={selectedDays}
         setSelectedDays={setSelectedDays}
